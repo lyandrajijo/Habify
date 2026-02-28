@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Habify</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    /* Splash screen */
+    #splash {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: white;
+      font-size: 64px;
+      font-weight: bold;
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      background-image: linear-gradient(to right, #fdd835, #64b5f6);
+      opacity: 1;
+      transition: opacity 1s ease; /* fade effect */
+    }
+
+    /* Hidden state for splash */
+    #splash.fade-out {
+      opacity: 0;
+    }
+
+    /* Main app hidden initially */
+    #app {
+      display: none;
+      padding: 20px;
+      background: linear-gradient(to bottom right, #fff9c4, #ffe082, #bbdefb, #64b5f6);
+      min-height: 100vh;
+    }
+    .tabs { display: flex; background: #fff; border-bottom: 2px solid #ccc; }
+    .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; font-weight: bold; color: #1565c0; }
+    .tab.active { border-bottom: 3px solid #1565c0; color: #0d47a1; }
+    .tab-content { display: none; padding: 20px; }
+    .tab-content.active { display: block; }
+    .habit-box, .chart-box {
+      margin-bottom: 25px;
+      padding: 15px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .habit-title { font-weight: bold; margin-bottom: 12px; font-size: 16px; color: #1565c0; }
+    .habit-grid { display: grid; grid-template-columns: repeat(10, 40px); gap: 8px; }
+    .day { width: 40px; height: 40px; border: 2px solid #ccc; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: background-color 0.3s; }
+    canvas { max-width: 300px; max-height: 300px; }
+    #clearBtn { margin-top: 15px; padding: 10px 20px; font-weight: bold; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    #clearBtn:hover { background: #d32f2f; }
+
+  </style>
+</head>
+<body>
+  <!-- Splash screen -->
+  <div id="splash">Habify</div>
+
+  <!-- Main app -->
+  <div class="tabs">
+    <div class="tab active" data-tab="habits">Habits</div>
+    <div class="tab" data-tab="stats">Statistics</div>
+  </div>
+
+  <div id="habits" class="tab-content active">
+    <h2>Habit Tracker - 30 Days</h2>
+    <form id="habitForm">
+      <input type="text" id="habitName" placeholder="Habit name" required>
+      <input type="color" id="habitColor" value="#4caf50" required>
+      <button type="submit">Add Habit</button>
+    </form>
+    <button id="clearBtn">Clear All Habits</button>
+    <div id="habitsContainer"></div>
+  </div>
+
+  <div id="stats" class="tab-content">
+    <h2>Statistics</h2>
+    <div id="chartsContainer"></div>
+  </div>
+
+
+  <script>
+    // Fade out splash after 1.5 seconds, then show app
+    setTimeout(() => {
+      const splash = document.getElementById("splash");
+      splash.classList.add("fade-out");
+
+      // Wait for fade animation to finish before hiding splash and showing app
+      setTimeout(() => {
+        splash.style.display = "none";
+        document.getElementById("app").style.display = "block";
+      }, 1000); // matches CSS transition duration
+    }, 1500);
+  </script>
+   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const habitForm = document.getElementById("habitForm");
+    const habitsContainer = document.getElementById("habitsContainer");
+    const chartsContainer = document.getElementById("chartsContainer");
+    const clearBtn = document.getElementById("clearBtn");
+
+    let habits = JSON.parse(localStorage.getItem("habits")) || [];
+
+    function lightenColor(hex, percent) {
+      let num = parseInt(hex.slice(1), 16),
+          r = (num >> 16) + percent,
+          g = (num >> 8 & 0x00FF) + percent,
+          b = (num & 0x0000FF) + percent;
+      return "#" + (
+        0x1000000 +
+        (r < 255 ? r : 255) * 0x10000 +
+        (g < 255 ? g : 255) * 0x100 +
+        (b < 255 ? b : 255)
+      ).toString(16).slice(1);
+    }
+ habits.forEach(habit => renderHabit(habit));
+
+    habitForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const habitName = document.getElementById("habitName").value;
+      const habitColor = document.getElementById("habitColor").value;
+      const habit = { name: habitName, color: habitColor, days: Array(30).fill(false) };
+      habits.push(habit);
+      localStorage.setItem("habits", JSON.stringify(habits));
+      renderHabit(habit);
+      habitForm.reset();
+      updateCharts();
+    });
+
+    function renderHabit(habit) {
+      const lightColor = lightenColor(habit.color, 80);
+      const habitBox = document.createElement("div");
+      habitBox.classList.add("habit-box");
+
+      const title = document.createElement("div");
+      title.classList.add("habit-title");
+      title.textContent = habit.name;
+      habitBox.appendChild(title);
+
+      const grid = document.createElement("div");
+      grid.classList.add("habit-grid");
+       habit.days.forEach((done, i) => {
+        const dayBox = document.createElement("div");
+        dayBox.classList.add("day");
+        dayBox.textContent = i + 1;
+        dayBox.style.backgroundColor = done ? habit.color : lightColor;
+        dayBox.style.color = done ? "white" : "black";
+
+        dayBox.addEventListener("click", () => {
+          habit.days[i] = !habit.days[i];
+          localStorage.setItem("habits", JSON.stringify(habits));
+          dayBox.style.backgroundColor = habit.days[i] ? habit.color : lightColor;
+          dayBox.style.color = habit.days[i] ? "white" : "black";
+          updateCharts();
+        });
+
+        grid.appendChild(dayBox);
+      });
+
+      habitBox.appendChild(grid);
+      habitsContainer.appendChild(habitBox);
+    }
+function updateCharts() {
+      chartsContainer.innerHTML = "";
+      habits.forEach(habit => {
+        const completed = habit.days.filter(Boolean).length;
+        const lightColor = lightenColor(habit.color, 80);
+
+        const data = [];
+        const colors = [];
+        for (let i = 0; i < 30; i++) {
+          if (habit.days[i]) {
+            data.push(1);
+            colors.push(habit.color);
+          } else {
+            data.push(1);
+            colors.push(lightColor);
+          }
+        }
+
+        const chartBox = document.createElement("div");
+        chartBox.classList.add("chart-box");
+
+        const title = document.createElement("div");
+        title.classList.add("habit-title");
+        title.textContent = habit.name;
+        chartBox.appendChild(title);
+
+        const canvas = document.createElement("canvas");
+        chartBox.appendChild(canvas);
+        chartsContainer.appendChild(chartBox);
+new Chart(canvas, {
+          type: 'pie',
+          data: {
+            labels: Array.from({length: 30}, (_, i) => `Day ${i+1}`),
+            datasets: [{
+              data: data,
+              backgroundColor: colors
+            }]
+          },
+          options: {
+            plugins: { legend: { display: false } }
+          }
+        });
+      });
+    }
+
+    updateCharts();
+
+    // Clear all habits
+    clearBtn.addEventListener("click", () => {
+      habits.forEach(habit => {
+        habit.days = Array(30).fill(false);
+      });
+      localStorage.setItem("habits", JSON.stringify(habits));
+      habitsContainer.innerHTML = "";
+      chartsContainer.innerHTML = "";
+      habits.forEach(habit => renderHabit(habit));
+      updateCharts();
+    });
+// Tab switching
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById(tab.dataset.tab).classList.add("active");
+      });
+    });
+  </script>
+
+
+
+</body>
+</html>
